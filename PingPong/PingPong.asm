@@ -100,6 +100,13 @@
             ballx: .res 1 ;ball horizontal position
             bally: .res 1 ;ball vertical position
             BallDirection: .res 1; low nibble is direction. Up,Down,Left,Right.
+        ;Paddles
+            PaddleOneTop: .res 1 ;y value of top sprite of paddle one
+            PaddleTwoTop: .res 1 ;y value of top sprite of paddle two
+            PaddleOneBottom: .res 1 ;y value of bottom sprite of paddle one
+            PaddleTwoBottom: .res 1 ;y value of bottom sprite of paddle two
+            PaddleOneX: .res 1 ;x position of paddle one
+            PaddleTwoX: .res 1 ;x position of paddle two
         ;Score
             score: .res 1 ; score only goes up to 7, so one byte is enough
 
@@ -170,7 +177,7 @@
             lda #01
             sta BallSpeed
         ;Set Ball Direction
-            lda #%00000110
+            lda #%00000010
             sta BallDirection
         rts
     DisplaySprites:
@@ -354,6 +361,32 @@
             ldy #$03
             lda (SpritePointer),y ;get x position
             sta ballx
+
+        ReadPaddlePos:
+            lda #$00
+            sta SpritePointer
+            lda #$02
+            sta SpritePointer+1
+            ldy #$04 ;y pos of top sprite
+            lda (SpritePointer),y
+            sta PaddleOneTop
+            ldy #$14 ;y pos of bottom sprite
+            lda (SpritePointer),y
+            sta PaddleOneBottom
+            ldy #$18 ;y pos of paddle two top sprite
+            lda (SpritePointer),y
+            sta PaddleTwoTop
+            ldy #$28 ;y pos of paddle two bottom sprite
+            lda (SpritePointer),y
+            sta PaddleTwoBottom
+            ldy #$07 ;x pos of paddle one sprite
+            lda (SpritePointer),y
+            adc #$08 ;add some pixels so it bounces off the right edge
+            sta PaddleOneX
+            ldy #$1B ;x pos of paddle two sprite
+            lda (SpritePointer),y
+            sbc #$08 ;subtract some pixels so it bounces off the left edge
+            sta PaddleTwoX
         
         CheckCollision:
             BallCheckUp:
@@ -405,17 +438,35 @@
                 sec
                 sbc BallSpeed ;x - ball speed
                 tax ;save the new position
-                sec
-                sbc #LEFTWALL ;check collision with left wall, change/add to player one paddle later
-                bcc LeftBounce;if there is a collision, bounce
-                txa ;if there isn't, load the new position
-                sta ballx
-                jmp BallCheckRight
+                BallCheckLeftWall:
+                    sec
+                    sbc #LEFTWALL ;check collision with left wall
+                    bcc PlayerTwoScore ;if collision with left wall, player two scores
+                BallCheckLeftPaddleX: ;Check if ball is within paddles X
+                    txa ;reload new position
+                    sec
+                    sbc PaddleOneX
+                    bcc BallCheckLeftPaddleY;if there is a collision, bounce
+                    jmp LeftNoBounce
+                BallCheckLeftPaddleY: ;Check if ball is within paddles Y
+                    lda PaddleOneTop ;PaddleOneTop should be less than bally
+                    sec
+                    sbc bally
+                    bcs LeftNoBounce ;If PaddleOneTop - bally >= 0, ball is above the paddle
+                    lda PaddleOneBottom ;PaddleOneBottom should be greater than bally
+                    sec
+                    sbc bally
+                    bcc LeftNoBounce ;If PaddleOneBottom - bally < 0, ball is below the paddle
+
                 LeftBounce: ;collided on the left, bounce to the right
                     lda BallDirection
                     eor #%00000011 ;toggles left to 0, right to 1, leaves other bits alone
                     sta BallDirection
-
+                    jmp BallCheckRight
+                LeftNoBounce:
+                    txa ;if there isn't, load the new position
+                    sta ballx
+                    jmp BallCheckRight
 
             BallCheckRight:
                 lda BallDirection
@@ -427,6 +478,10 @@
                 adc BallSpeed ;x + ball speed
                 tax ;save the new position
                 lda #RIGHTWALL ;check collision with left wall, change/add to player one paddle later
+                sbc ballx
+                bcc PlayerOneScore
+
+                lda PaddleTwoX
                 sbc ballx
                 bcc RightBounce;if there is a collision, bounce
                 txa ;if there isn't, load the new position
@@ -451,6 +506,8 @@
 
         rts
 
+    PlayerOneScore:
+    PlayerTwoScore:
 
 ;Graphics
     ;Setup Palettes
