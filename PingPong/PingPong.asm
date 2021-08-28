@@ -69,12 +69,12 @@
             StateOnePlayer = 1 ;one-player mode
             StateTwoPlayer = 2 ;two-player mode
             StateGameOver = 3 ;display game over screen
-        ;Ball
-            BallSpeed = 1 ;Speed of the ball
+        ;Paddles
+            PaddleSpeed = 2 ;Speed of the paddles
         ;Wall Boundaries
             RIGHTWALL = $E9 ;Define boundaries
-            TOPWALL = $0F
-            BOTTOMWALL = $D9
+            TOPWALL = $08
+            BOTTOMWALL = $DE
             LEFTWALL = $10
         ;NES Registers
             PPUCTRL = $2000
@@ -96,6 +96,7 @@
         BGPointer: .res 2 ;used to select address when loading background
         SpritePointer: .res 2 ;used to select address when loading sprites
         ;Ball
+            BallSpeed: .res 1
             ballx: .res 1 ;ball horizontal position
             bally: .res 1 ;ball vertical position
             ballup: .res 1 ;1 = ball moving up
@@ -148,6 +149,7 @@
         jsr LoadPlayStateBG
         jsr LoadSprites
         jsr LoadAttribute
+        jsr InitializeStats
         FinishSetup:
             LDA #%10010000   ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 1
             STA PPUCTRL
@@ -167,6 +169,11 @@
         jsr ReadControllers
         rti
 ;Game Functions
+    InitializeStats:
+        ;Set Ball Speed
+            lda #01
+            sta BallSpeed
+        rts
     DisplaySprites:
         lda #$00
         sta OAMADDR ;Set low byte (00) of sprite RAM address
@@ -206,22 +213,22 @@
             sta SpritePointer+1
             MoveUp:
                 ldx #$00
-                ldy #$00
+                ldy #$04 ;Address of first sprite Y pos, $0204
                 MoveUpLoop:
                     lda (SpritePointer), y; Get Y pos of current sprite
                     sec
-                    sbc #BallSpeed
-                    tax
+                    sbc #PaddleSpeed ;y - speed
+                    tax ;save the new position
                     sec
-                    sbc #TOPWALL
-                    bcc ReadUpDone
-                    txa
-                    sta (SpritePointer), y
-                    tya
+                    sbc #TOPWALL ;check collision with top wall
+                    bcc ReadUpDone ;if there is a collision, don't move up
+                    txa ;if there isn't, load the new position
+                    sta (SpritePointer), y ;move up
+                    tya 
                     clc
-                    adc #$04
+                    adc #$04 ;get next sprite y pos
                     tay
-                    cmp #$1C
+                    cmp #$18 ;3 Paddle sprites, 4 bytes each, addresses $0204-0217.
                     bcc MoveUpLoop
 
             ReadUpDone:
@@ -237,21 +244,22 @@
             sta SpritePointer+1
             MoveDown:
                 ldx #$00
-                ldy #$18
+                ldy #$14 ;Bottom paddle sprite y pos = $0214
                 MoveDownLoop:
                     lda (SpritePointer), y
                     clc
-                    adc #BallSpeed
+                    adc #PaddleSpeed
                     tax
                     lda #BOTTOMWALL
                     sbc (SpritePointer), y
-                    beq ReadDownDone
+                    bcc ReadDownDone
                     txa
                     sta (SpritePointer), y
                     tya
                     sec
                     sbc #$04
                     tay
+                    cmp #$04
                     bcs MoveDownLoop
 
             ReadDownDone:
@@ -323,7 +331,7 @@
                 lda BallSprite, X
                 sta $0200, x
                 inx
-                cpx #$1C ;See Sprites
+                cpx #$2C ;See Sprites
                 bne LoadSpritesLoop
             rts
 
@@ -363,11 +371,15 @@
         PaddleOneSprite:
             .byte $70,$01,$00,$18 ;4-7
             .byte $78,$02,$00,$18 ;8-B
-            .byte $80,$03,$00,$18 ;C-F
+            .byte $80,$02,$00,$18 ;C-F
+            .byte $88,$02,$00,$18 ;10-13
+            .byte $90,$03,$00,$18 ;14-17
         PaddleTwoSprite:
-            .byte $70,$01,$00,$E0 ;10-13
-            .byte $78,$02,$00,$E0 ;14-17
-            .byte $80,$03,$00,$E0 ;18-1B
+            .byte $70,$01,$00,$E0 ;18-1B
+            .byte $78,$02,$00,$E0 ;1C-1F
+            .byte $80,$02,$00,$E0 ;20-23
+            .byte $88,$02,$00,$E0 ;24-27
+            .byte $90,$03,$00,$E0 ;28-2B
     ;Nametables
         ;Background
             PlayStateBG:
