@@ -20,7 +20,7 @@
     ;                ^------------<-------------<-------------<|
     ;
     ; DEVELOPMENT STAGES
-    ; Stage 1:
+    ; Stage 1: 
     ; Design playfield, paddle, and ball.
     ; Implement ball movement and manual paddle control.
     ; 
@@ -72,10 +72,10 @@
         ;Paddles
             PaddleSpeed = 2 ;Speed of the paddles
         ;Wall Boundaries
-            RIGHTWALL = $E9 ;Define boundaries
+            RIGHTWALL = $F0 ;Define boundaries
             TOPWALL = $08
             BOTTOMWALL = $DE
-            LEFTWALL = $10
+            LEFTWALL = $08
         ;NES Registers
             PPUCTRL = $2000
             PPUMASK = $2001
@@ -99,12 +99,7 @@
             BallSpeed: .res 1
             ballx: .res 1 ;ball horizontal position
             bally: .res 1 ;ball vertical position
-            ballup: .res 1 ;1 = ball moving up
-            balldown: .res 1 ;1 = ball moving down
-            ballleft: .res 1 ;1 = ball moving left
-            ballright: .res 1 ;1 = ball moving right
-            ballspeedx: .res 1 ;ball horizontal speed per frame
-            ballspeedy: .res 1 ; ball vertical speed per frame
+            BallDirection: .res 1; low nibble is direction. Up,Down,Left,Right.
         ;Score
             score: .res 1 ; score only goes up to 7, so one byte is enough
 
@@ -167,12 +162,16 @@
     VBLANK: ;Runs every frame
         jsr DisplaySprites
         jsr ReadControllers
+        jsr BallMovement
         rti
 ;Game Functions
     InitializeStats:
         ;Set Ball Speed
             lda #01
             sta BallSpeed
+        ;Set Ball Direction
+            lda #%00000110
+            sta BallDirection
         rts
     DisplaySprites:
         lda #$00
@@ -342,6 +341,117 @@
 
                 PlayerTwoReadDownDone:
         rts
+
+    BallMovement:
+        ReadBallPos:
+            lda #$00 ;point to ball sprite
+            sta SpritePointer
+            lda #$02
+            sta SpritePointer+1
+            ldy #$00
+            lda (SpritePointer),y ;get y position
+            sta bally
+            ldy #$03
+            lda (SpritePointer),y ;get x position
+            sta ballx
+        
+        CheckCollision:
+            BallCheckUp:
+                lda BallDirection
+                and #%00001000 ;up
+                beq BallCheckDown;if not moving up
+
+                lda bally
+                sec
+                sbc BallSpeed ;y - ball speed
+                tax ;save the new position
+                sec
+                sbc #TOPWALL ;check collision with left wall, change/add to player one paddle later
+                bcc TopBounce;if there is a collision, bounce
+                txa ;if there isn't, load the new position
+                sta bally
+                jmp BallCheckDown
+                TopBounce: ;collided on the top, bounce down
+                    lda BallDirection
+                    eor #%00001100 ;toggles up to 0, down to 1, leaves other bits alone
+                    sta BallDirection
+
+            BallCheckDown:
+                lda BallDirection
+                and #%00000100 ;down
+                beq BallCheckLeft;if not moving down
+
+                lda bally
+                clc
+                adc BallSpeed ;y + ball speed
+                tax ;save the new position
+                lda #BOTTOMWALL ;check collision with left wall, change/add to player one paddle later
+                sbc bally
+                bcc BottomBounce;if there is a collision, bounce
+                txa ;if there isn't, load the new position
+                sta bally
+                jmp BallCheckLeft
+                BottomBounce: ;collided on the bottom, bounce Up
+                    lda BallDirection
+                    eor #%00001100 ;toggles Up to 1, Down to 0, leaves other bits alone
+                    sta BallDirection
+
+            BallCheckLeft:
+                lda BallDirection
+                and #%00000010 ;left
+                beq BallCheckRight;if not moving left
+
+                lda ballx
+                sec
+                sbc BallSpeed ;x - ball speed
+                tax ;save the new position
+                sec
+                sbc #LEFTWALL ;check collision with left wall, change/add to player one paddle later
+                bcc LeftBounce;if there is a collision, bounce
+                txa ;if there isn't, load the new position
+                sta ballx
+                jmp BallCheckRight
+                LeftBounce: ;collided on the left, bounce to the right
+                    lda BallDirection
+                    eor #%00000011 ;toggles left to 0, right to 1, leaves other bits alone
+                    sta BallDirection
+
+
+            BallCheckRight:
+                lda BallDirection
+                and #%00000001 ;right
+                beq BallCheckDone;if not moving right
+
+                lda ballx
+                clc
+                adc BallSpeed ;x + ball speed
+                tax ;save the new position
+                lda #RIGHTWALL ;check collision with left wall, change/add to player one paddle later
+                sbc ballx
+                bcc RightBounce;if there is a collision, bounce
+                txa ;if there isn't, load the new position
+                sta ballx
+                jmp BallCheckDone
+                RightBounce: ;collided on the left, bounce to the right
+                    lda BallDirection
+                    eor #%00000011 ;toggles left to 1, right to 0, leaves other bits alone
+                    sta BallDirection
+            BallCheckDone:
+        UpdateBallPosition: ;ballx and bally have been updated, now write to sprite registers $0200 and $0203
+            lda #$00 ;point to ball sprite
+            sta SpritePointer
+            lda #$02
+            sta SpritePointer+1
+            ldy #0
+            lda bally
+            sta (SpritePointer),y
+            ldy #3
+            lda ballx
+            sta (SpritePointer),y
+
+        rts
+
+
 ;Graphics
     ;Setup Palettes
         SetupPalettes: 
