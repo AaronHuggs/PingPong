@@ -477,20 +477,35 @@
                 clc
                 adc BallSpeed ;x + ball speed
                 tax ;save the new position
-                lda #RIGHTWALL ;check collision with left wall, change/add to player one paddle later
-                sbc ballx
-                bcc PlayerOneScore
+                BallCheckRightWall:
+                    lda #RIGHTWALL
+                    sbc ballx ;check collision with right wall
+                    bcc PlayerOneScore ;if collision with right wall, player one scores
+                BallCheckRightPaddleX: ;Check if ball is within paddles X
+                    lda PaddleTwoX
+                    sec
+                    sbc ballx
+                    bcc BallCheckRightPaddleY;if there is a collision, bounce
+                    jmp RightNoBounce
+                BallCheckRightPaddleY: ;Check if ball is within paddles Y
+                    lda PaddleTwoTop ;PaddleTwoTop should be less than bally
+                    sec
+                    sbc bally
+                    bcs RightNoBounce ;If PaddleTwoTop - bally >= 0, ball is above the paddle
+                    lda PaddleTwoBottom ;PaddleTwoBottom should be greater than bally
+                    sec
+                    sbc bally
+                    bcc RightNoBounce ;If PaddleTwoBottom - bally < 0, ball is below the paddle
 
-                lda PaddleTwoX
-                sbc ballx
-                bcc RightBounce;if there is a collision, bounce
-                txa ;if there isn't, load the new position
-                sta ballx
-                jmp BallCheckDone
-                RightBounce: ;collided on the left, bounce to the right
+                RightBounce: ;collided on the Right, bounce to the left
                     lda BallDirection
-                    eor #%00000011 ;toggles left to 1, right to 0, leaves other bits alone
+                    eor #%00000011 ;toggles left to 0, right to 1, leaves other bits alone
                     sta BallDirection
+                    jmp BallCheckDone
+                RightNoBounce:
+                    txa ;if there isn't, load the new position
+                    sta ballx
+                    jmp BallCheckDone
             BallCheckDone:
         UpdateBallPosition: ;ballx and bally have been updated, now write to sprite registers $0200 and $0203
             lda #$00 ;point to ball sprite
