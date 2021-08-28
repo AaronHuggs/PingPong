@@ -186,83 +186,161 @@
         sta $4016
         lda #$00
         sta $4016 ; tell both the controllers to latch buttons
+        PlayerOneController:
+            ldx #$08 ; loop 8 times for all 8 buttons
+            PlayerOneReadControllerLoop:
+                lda $4016 ;get current buttons
+                lsr a ;move bit 0 to carry
+                rol buttons ;move carry into buttons register
+                dex ;decrease x
+                bne PlayerOneReadControllerLoop
+            ;A,B,Select,Start,Up,Down,Left,Right
+            PlayerOneReadStart:
+                lda buttons
+                and #%00010000 ;bit 5 = start
+                beq PlayerOneReadStartDone ;branch if button is not pressed
 
-        ldx #$08 ; loop 8 times for all 8 buttons
-        ReadControllerLoop:
-            lda $4016 ;get current buttons
-            lsr a ;move bit 0 to carry
-            rol buttons ;move carry into buttons register
-            dex ;decrease x
-            bne ReadControllerLoop
-        ;A,B,Select,Start,Up,Down,Left,Right
-        ReadStart:
-            lda buttons
-            and #%00010000 ;bit 5 = start
-            beq ReadStartDone ;branch if button is not pressed
+                PlayerOneReadStartDone:
+            PlayerOneReadUp:
+                lda buttons
+                and #%00001000 ;bit 4 = up
+                beq PlayerOneReadUpDone ;branch if button is not pressed
+                
+                ;Get Paddle Sprite info
+                lda #$00
+                sta SpritePointer
+                lda #$02
+                sta SpritePointer+1
+                PlayerOneMoveUp:
+                    ldx #$00
+                    ldy #$04 ;Address of first sprite Y pos, $0204
+                    PlayerOneMoveUpLoop:
+                        lda (SpritePointer), y; Get Y pos of current sprite
+                        sec
+                        sbc #PaddleSpeed ;y - speed
+                        tax ;save the new position
+                        sec
+                        sbc #TOPWALL ;check collision with top wall
+                        bcc PlayerOneReadUpDone ;if there is a collision, don't move up
+                        txa ;if there isn't, load the new position
+                        sta (SpritePointer), y ;move up
+                        tya 
+                        clc
+                        adc #$04 ;get next sprite y pos
+                        tay
+                        cmp #$18 ;3 Paddle sprites, 4 bytes each, addresses $0204-0217.
+                        bcc PlayerOneMoveUpLoop
 
-            ReadStartDone:
-        ReadUp:
-            lda buttons
-            and #%00001000 ;bit 4 = up
-            beq ReadUpDone ;branch if button is not pressed
+                PlayerOneReadUpDone:
+            PlayerOneReadDown:
+                lda buttons
+                and #%00000100 ;bit 3 = down
+                beq PlayerOneReadDownDone ;branch if button is not pressed
+
+                ;Get Paddle Sprite info
+                lda #$00
+                sta SpritePointer
+                lda #$02
+                sta SpritePointer+1
+                PlayerOneMoveDown:
+                    ldx #$00
+                    ldy #$14 ;Bottom paddle sprite y pos = $0214
+                    PlayerOneMoveDownLoop:
+                        lda (SpritePointer), y
+                        clc
+                        adc #PaddleSpeed
+                        tax
+                        lda #BOTTOMWALL
+                        sbc (SpritePointer), y
+                        bcc PlayerOneReadDownDone
+                        txa
+                        sta (SpritePointer), y
+                        tya
+                        sec
+                        sbc #$04
+                        tay
+                        cmp #$04
+                        bcs PlayerOneMoveDownLoop
+
+                PlayerOneReadDownDone:
             
-            ;Get Paddle Sprite info
-            lda #$00
-            sta SpritePointer
-            lda #$02
-            sta SpritePointer+1
-            MoveUp:
-                ldx #$00
-                ldy #$04 ;Address of first sprite Y pos, $0204
-                MoveUpLoop:
-                    lda (SpritePointer), y; Get Y pos of current sprite
-                    sec
-                    sbc #PaddleSpeed ;y - speed
-                    tax ;save the new position
-                    sec
-                    sbc #TOPWALL ;check collision with top wall
-                    bcc ReadUpDone ;if there is a collision, don't move up
-                    txa ;if there isn't, load the new position
-                    sta (SpritePointer), y ;move up
-                    tya 
-                    clc
-                    adc #$04 ;get next sprite y pos
-                    tay
-                    cmp #$18 ;3 Paddle sprites, 4 bytes each, addresses $0204-0217.
-                    bcc MoveUpLoop
+        PlayerTwoController:
+            ldx #$08 ; loop 8 times for all 8 buttons
+            PlayerTwoReadControllerLoop:
+                lda $4017 ;get current buttons
+                lsr a ;move bit 0 to carry
+                rol buttons ;move carry into buttons register
+                dex ;decrease x
+                bne PlayerTwoReadControllerLoop
+            ;A,B,Select,Start,Up,Down,Left,Right
+            PlayerTwoReadStart:
+                lda buttons
+                and #%00010000 ;bit 5 = start
+                beq PlayerTwoReadStartDone ;branch if button is not pressed
 
-            ReadUpDone:
-        ReadDown:
-            lda buttons
-            and #%00000100 ;bit 3 = down
-            beq ReadDownDone ;branch if button is not pressed
+                PlayerTwoReadStartDone:
+            PlayerTwoReadUp:
+                lda buttons
+                and #%00001000 ;bit 4 = up
+                beq PlayerTwoReadUpDone ;branch if button is not pressed
+                
+                ;Get Paddle Sprite info
+                lda #$00
+                sta SpritePointer
+                lda #$02
+                sta SpritePointer+1
+                PlayerTwoMoveUp:
+                    ldx #$00
+                    ldy #$18 ;Address of first sprite Y pos, $0218
+                    PlayerTwoMoveUpLoop:
+                        lda (SpritePointer), y; Get Y pos of current sprite
+                        sec
+                        sbc #PaddleSpeed ;y - speed
+                        tax ;save the new position
+                        sec
+                        sbc #TOPWALL ;check collision with top wall
+                        bcc PlayerTwoReadUpDone ;if there is a collision, don't move up
+                        txa ;if there isn't, load the new position
+                        sta (SpritePointer), y ;move up
+                        tya 
+                        clc
+                        adc #$04 ;get next sprite y pos
+                        tay
+                        cmp #$2C ;3 Paddle sprites, 4 bytes each, addresses $0218-022B.
+                        bcc PlayerTwoMoveUpLoop
 
-            ;Get Paddle Sprite info
-            lda #$00
-            sta SpritePointer
-            lda #$02
-            sta SpritePointer+1
-            MoveDown:
-                ldx #$00
-                ldy #$14 ;Bottom paddle sprite y pos = $0214
-                MoveDownLoop:
-                    lda (SpritePointer), y
-                    clc
-                    adc #PaddleSpeed
-                    tax
-                    lda #BOTTOMWALL
-                    sbc (SpritePointer), y
-                    bcc ReadDownDone
-                    txa
-                    sta (SpritePointer), y
-                    tya
-                    sec
-                    sbc #$04
-                    tay
-                    cmp #$04
-                    bcs MoveDownLoop
+                PlayerTwoReadUpDone:
+            PlayerTwoReadDown:
+                lda buttons
+                and #%00000100 ;bit 3 = down
+                beq PlayerTwoReadDownDone ;branch if button is not pressed
 
-            ReadDownDone:
+                ;Get Paddle Sprite info
+                lda #$00
+                sta SpritePointer
+                lda #$02
+                sta SpritePointer+1
+                PlayerTwoMoveDown:
+                    ldx #$00
+                    ldy #$28 ;Bottom paddle sprite y pos = $0214
+                    PlayerTwoMoveDownLoop:
+                        lda (SpritePointer), y
+                        clc
+                        adc #PaddleSpeed
+                        tax
+                        lda #BOTTOMWALL
+                        sbc (SpritePointer), y
+                        bcc PlayerTwoReadDownDone
+                        txa
+                        sta (SpritePointer), y
+                        tya
+                        sec
+                        sbc #$04
+                        tay
+                        cmp #$18 ;if all sprites have moved
+                        bcs PlayerTwoMoveDownLoop
+
+                PlayerTwoReadDownDone:
         rts
 ;Graphics
     ;Setup Palettes
