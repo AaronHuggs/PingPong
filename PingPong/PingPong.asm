@@ -109,6 +109,8 @@
             PaddleTwoX: .res 1 ;x position of paddle two
         ;Score
             score: .res 1 ; score only goes up to 7, so one byte is enough
+        ;Timers
+            GameTimer: .res 2 ; keeps track of how long the game has been playing
 
 .segment "CODE"
 ;NES Initialization
@@ -170,6 +172,7 @@
         jsr DisplaySprites
         jsr ReadControllers
         jsr BallMovement
+        jsr Timers
         rti
 ;Game Functions
     InitializeStats:
@@ -523,7 +526,28 @@
 
     PlayerOneScore:
     PlayerTwoScore:
-
+    Timers:
+        ldx GameTimer ;Get low byte
+        inx ;increment by 1
+        stx GameTimer
+        bne TimersDone;if 0, increment high byte
+        ldx GameTimer+1
+        inx ;increment high byte by 1
+        stx GameTimer+1
+        txa
+        cmp #$07
+        bne TimersDone;
+        lda #00 ;reset timer
+        sta GameTimer
+        sta GameTimer+1
+        jsr IncreaseBallSpeed
+        TimersDone:
+            rts
+    IncreaseBallSpeed:
+        ldx BallSpeed
+        inx
+        stx BallSpeed
+        rts
 ;Graphics
     ;Setup Palettes
         SetupPalettes: 
