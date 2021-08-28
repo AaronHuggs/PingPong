@@ -164,7 +164,7 @@
 ;Vblank 
     VBLANK: ;Runs every frame
         jsr DisplaySprites
-
+        jsr ReadControllers
         rti
 ;Game Functions
     DisplaySprites:
@@ -174,6 +174,88 @@
         sta OAMDMA ;Set high byte (02) of sprite RAM address and begin DMA transfer
         rts
 
+    ReadControllers: ;---------------------------------------
+        lda #$01
+        sta $4016
+        lda #$00
+        sta $4016 ; tell both the controllers to latch buttons
+
+        ldx #$08 ; loop 8 times for all 8 buttons
+        ReadControllerLoop:
+            lda $4016 ;get current buttons
+            lsr a ;move bit 0 to carry
+            rol buttons ;move carry into buttons register
+            dex ;decrease x
+            bne ReadControllerLoop
+        ;A,B,Select,Start,Up,Down,Left,Right
+        ReadStart:
+            lda buttons
+            and #%00010000 ;bit 5 = start
+            beq ReadStartDone ;branch if button is not pressed
+
+            ReadStartDone:
+        ReadUp:
+            lda buttons
+            and #%00001000 ;bit 4 = up
+            beq ReadUpDone ;branch if button is not pressed
+            
+            ;Get Paddle Sprite info
+            lda #$00
+            sta SpritePointer
+            lda #$02
+            sta SpritePointer+1
+            MoveUp:
+                ldx #$00
+                ldy #$00
+                MoveUpLoop:
+                    lda (SpritePointer), y; Get Y pos of current sprite
+                    sec
+                    sbc #BallSpeed
+                    tax
+                    sec
+                    sbc #TOPWALL
+                    bcc ReadUpDone
+                    txa
+                    sta (SpritePointer), y
+                    tya
+                    clc
+                    adc #$04
+                    tay
+                    cmp #$1C
+                    bcc MoveUpLoop
+
+            ReadUpDone:
+        ReadDown:
+            lda buttons
+            and #%00000100 ;bit 3 = down
+            beq ReadDownDone ;branch if button is not pressed
+
+            ;Get Paddle Sprite info
+            lda #$00
+            sta SpritePointer
+            lda #$02
+            sta SpritePointer+1
+            MoveDown:
+                ldx #$00
+                ldy #$18
+                MoveDownLoop:
+                    lda (SpritePointer), y
+                    clc
+                    adc #BallSpeed
+                    tax
+                    lda #BOTTOMWALL
+                    sbc (SpritePointer), y
+                    beq ReadDownDone
+                    txa
+                    sta (SpritePointer), y
+                    tya
+                    sec
+                    sbc #$04
+                    tay
+                    bcs MoveDownLoop
+
+            ReadDownDone:
+        rts
 ;Graphics
     ;Setup Palettes
         SetupPalettes: 
@@ -201,18 +283,7 @@
                 bne LoadSpritePaletteLoop
             rts
 
-        ;Palettes
-            background_palette:
-                .byte $00,$0F,$10,$30	;background palette 1 starting at $3F00
-                .byte $00,$0F,$10,$30	;background palette 2
-                .byte $00,$0F,$10,$30	;background palette 3
-                .byte $00,$0F,$10,$30	;background palette 4
-                
-            sprite_palette:
-                .byte $00,$0F,$10,$30	;sprite palette 1 starting at $3F10
-                .byte $00,$0F,$10,$30	;sprite palette 2
-                .byte $00,$0F,$10,$30	;sprite palette 3
-                .byte $00,$0F,$10,$30	;sprite palette 4
+        
 
     ;Setup Backgrounds
         LoadPlayStateBG:
@@ -246,29 +317,15 @@
             DoneLoadingPlayStateBG:
                 rts
     ;Setup Sprites
-        LoadSprites: 
+        LoadSprites:
             ldx #$00
-            LoadBallSprite:
-                lda BallSprite, x
+            LoadSpritesLoop:
+                lda BallSprite, X
                 sta $0200, x
                 inx
-                cpx #$04 
-                bne LoadBallSprite
-            ldx #$00
-            LoadPaddleOneSprite:
-                lda PaddleOneSprite, x
-                sta $0204, x
-                inx
-                cpx #$0C ; 3 sprites, 4 x 3 = 12 ($0C)
-                bne LoadPaddleOneSprite
-            ; Sprites are ready!
+                cpx #$1C ;See Sprites
+                bne LoadSpritesLoop
             rts
-        BallSprite:
-            .byte $80,$00,$00,$40
-        PaddleOneSprite:
-            .byte $60,$01,$00,$10
-            .byte $68,$02,$00,$10
-            .byte $70,$03,$00,$10
 
     ;Setup Attribute
         LoadAttribute:
@@ -288,6 +345,29 @@
 
             rts
 
+    ;Palettes
+        background_palette:
+            .byte $00,$0F,$10,$30	;background palette 1 starting at $3F00
+            .byte $00,$0F,$10,$30	;background palette 2
+            .byte $00,$0F,$10,$30	;background palette 3
+            .byte $00,$0F,$10,$30	;background palette 4
+            
+        sprite_palette:
+            .byte $00,$0F,$10,$30	;sprite palette 1 starting at $3F10
+            .byte $00,$0F,$10,$30	;sprite palette 2
+            .byte $00,$0F,$10,$30	;sprite palette 3
+            .byte $00,$0F,$10,$30	;sprite palette 4
+    ;Sprites
+        BallSprite:
+            .byte $78,$00,$00,$78 ;0-3
+        PaddleOneSprite:
+            .byte $70,$01,$00,$18 ;4-7
+            .byte $78,$02,$00,$18 ;8-B
+            .byte $80,$03,$00,$18 ;C-F
+        PaddleTwoSprite:
+            .byte $70,$01,$00,$E0 ;10-13
+            .byte $78,$02,$00,$E0 ;14-17
+            .byte $80,$03,$00,$E0 ;18-1B
     ;Nametables
         ;Background
             PlayStateBG:
