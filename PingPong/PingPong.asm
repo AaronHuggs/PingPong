@@ -370,23 +370,42 @@
             sta SpritePointer
             lda #$02
             sta SpritePointer+1
+
             ldy #$04 ;y pos of top sprite
             lda (SpritePointer),y
+            sbc #$08
+            cmp #$FF
+            bne :+
+            txa
+            :
             sta PaddleOneTop
+
             ldy #$14 ;y pos of bottom sprite
             lda (SpritePointer),y
+            adc #$08
             sta PaddleOneBottom
+
             ldy #$18 ;y pos of paddle two top sprite
             lda (SpritePointer),y
+            tax
+            sbc #$08
+            cmp #$FF
+            bne :+
+            txa
+            :
             sta PaddleTwoTop
+
             ldy #$28 ;y pos of paddle two bottom sprite
             lda (SpritePointer),y
+            adc #$08
             sta PaddleTwoBottom
+
             ldy #$07 ;x pos of paddle one sprite
             lda (SpritePointer),y
-            adc #$08 ;add some pixels so it bounces off the right edge
+            adc #$04 ;add some pixels so it bounces off the right edge
             sta PaddleOneX
-            ldy #$1B ;x pos of paddle two sprite
+
+            ldy #$1F ;x pos of paddle two sprite
             lda (SpritePointer),y
             sbc #$08 ;subtract some pixels so it bounces off the left edge
             sta PaddleTwoX
@@ -444,7 +463,7 @@
                 BallCheckLeftWall:
                     sec
                     sbc #LEFTWALL ;check collision with left wall
-                    bcc PlayerTwoScore ;if collision with left wall, player two scores
+                    jmp BallCheckLeftPaddleX ;if collision with left wall, player two scores
                 BallCheckLeftPaddleX: ;Check if ball is within paddles X
                     txa ;reload new position
                     sec
@@ -461,11 +480,32 @@
                     sbc bally
                     bcc LeftNoBounce ;If PaddleOneBottom - bally < 0, ball is below the paddle
 
-                LeftBounce: ;collided on the left, bounce to the right
-                    lda BallDirection
-                    eor #%00000011 ;toggles left to 0, right to 1, leaves other bits alone
-                    sta BallDirection
-                    jmp BallCheckRight
+                LeftBounce: ;collided on the left, bounce to the right ;// 70 78 80 88 90 //
+                    lda bally
+                    sec
+                    sbc #$78
+                    bcs LeftLowBounce
+                    lda bally
+                    sec
+                    sbc #$88
+                    bcs LeftMidBounce
+                    jmp LeftHighBounce
+
+                    LeftHighBounce:
+                        lda BallDirection
+                        eor #%00001011
+                        sta BallDirection
+                        jmp BallCheckRight
+                    LeftMidBounce:
+                        lda BallDirection
+                        eor #%00000011 ;toggles left to 0, right to 1, leaves other bits alone
+                        sta BallDirection
+                        jmp BallCheckRight
+                    LeftLowBounce:
+                        lda BallDirection
+                        eor #%00000111
+                        sta BallDirection
+                        jmp BallCheckRight
                 LeftNoBounce:
                     txa ;if there isn't, load the new position
                     sta ballx
@@ -483,7 +523,7 @@
                 BallCheckRightWall:
                     lda #RIGHTWALL
                     sbc ballx ;check collision with right wall
-                    bcc PlayerOneScore ;if collision with right wall, player one scores
+                    jmp BallCheckRightPaddleX ;if collision with right wall, player one scores
                 BallCheckRightPaddleX: ;Check if ball is within paddles X
                     lda PaddleTwoX
                     sec
@@ -501,10 +541,30 @@
                     bcc RightNoBounce ;If PaddleTwoBottom - bally < 0, ball is below the paddle
 
                 RightBounce: ;collided on the Right, bounce to the left
-                    lda BallDirection
-                    eor #%00000011 ;toggles left to 0, right to 1, leaves other bits alone
-                    sta BallDirection
-                    jmp BallCheckDone
+                    lda bally
+                    sec
+                    sbc #$78
+                    bcs RightLowBounce
+                    lda bally
+                    sec
+                    sbc #$88
+                    bcs RightMidBounce
+                    jmp RightHighBounce
+                    RightHighBounce:
+                        lda BallDirection
+                        eor #%00001011
+                        sta BallDirection
+                        jmp BallCheckDone
+                    RightMidBounce:
+                        lda BallDirection
+                        eor #%00000011 ;toggles left to 0, right to 1, leaves other bits alone
+                        sta BallDirection
+                        jmp BallCheckDone
+                    RightLowBounce:
+                        lda BallDirection
+                        eor #%00000111
+                        sta BallDirection
+                        jmp BallCheckDone
                 RightNoBounce:
                     txa ;if there isn't, load the new position
                     sta ballx
@@ -525,7 +585,9 @@
         rts
 
     PlayerOneScore:
+        jmp RESET
     PlayerTwoScore:
+        jmp RESET
     Timers:
         ldx GameTimer ;Get low byte
         inx ;increment by 1
@@ -651,7 +713,7 @@
             .byte $00,$0F,$10,$30	;sprite palette 4
     ;Sprites
         BallSprite:
-            .byte $78,$00,$00,$78 ;0-3
+            .byte $0B,$00,$00,$78 ;0-3
         PaddleOneSprite:
             .byte $70,$01,$00,$18 ;4-7
             .byte $78,$02,$00,$18 ;8-B
