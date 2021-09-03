@@ -173,16 +173,22 @@
 
 ;Vblank 
     VBLANK: ;Runs every frame
-        lda gamestate
-        cmp StateTwoPlayer
-        bne VblankEnd
-        jsr TwoPlayerMode
+        CheckTwoPlayer:
+            lda gamestate
+            cmp #StateTwoPlayer
+            bne CheckPaused
+            jsr TwoPlayerMode
+        CheckPaused:
+            lda gamestate
+            cmp #StatePause
+            bne VblankEnd
+            jsr PauseMode
         VblankEnd:
             rti
 ;Game Functions
     InitializeStats:
-        ;Set GameState
-            lda StateTwoPlayer
+        ;Set GameStates
+            lda #StateTwoPlayer
             sta gamestate
         ;Set score to 0
             lda #00
@@ -205,6 +211,11 @@
         jsr ReadControllers
         jsr BallMovement
         jsr SpeedUpTimer
+        rts
+
+    PauseMode:
+        jsr DisplaySprites
+        jsr PauseTimerShort
         rts
 
     DisplaySprites:
@@ -644,6 +655,19 @@
         SpeedUpTimerDone:
             rts
     
+    PauseTimerShort:
+        ldx PauseTimer ;Get low byte
+        inx ;increment by 1
+        stx PauseTimer
+        txa
+        cmp #$40
+        bne PauseTimerShortDone;
+        jsr ResetTimers
+        lda #StateTwoPlayer
+        sta gamestate
+        PauseTimerShortDone:
+            rts
+
     ResetTimers:
         lda #00 ;reset timer
         sta GameTimer
@@ -665,6 +689,8 @@
         lda #01 ;reset speed
         sta BallSpeed
         jsr ResetTimers
+        lda #StatePause
+        sta gamestate
         rts
     PlayerOneWins:
         jmp RESET
