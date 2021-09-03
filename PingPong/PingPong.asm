@@ -20,7 +20,7 @@
     ;                ^------------<-------------<-------------<|
     ;
     ; DEVELOPMENT STAGES
-    ; Stage 1: 
+    ; Stage 1: DONE!
     ; Design playfield, paddle, and ball.
     ; Implement ball movement and manual paddle control.
     ; 
@@ -108,9 +108,12 @@
             PaddleOneX: .res 1 ;x position of paddle one
             PaddleTwoX: .res 1 ;x position of paddle two
         ;Score
-            score: .res 1 ; score only goes up to 7, so one byte is enough
+            PlayerOneScore: .res 1 ; score only goes up to 7, so one byte is enough
+            PlayerTwoScore: .res 1
         ;Timers
             GameTimer: .res 2 ; keeps track of how long the game has been playing
+            PauseTimer: .res 2 ; used to pause the game briefly
+        StatePause = 4 ;State when game is paused
 
 .segment "CODE"
 ;NES Initialization
@@ -152,6 +155,7 @@
         jsr SetupPalettes
         jsr LoadPlayStateBG
         jsr LoadSprites
+        jsr LoadScore
         jsr LoadAttribute
         jsr InitializeStats
         FinishSetup:
@@ -169,20 +173,40 @@
 
 ;Vblank 
     VBLANK: ;Runs every frame
-        jsr DisplaySprites
-        jsr ReadControllers
-        jsr BallMovement
-        jsr Timers
-        rti
+        lda gamestate
+        cmp StateTwoPlayer
+        bne VblankEnd
+        jsr TwoPlayerMode
+        VblankEnd:
+            rti
 ;Game Functions
     InitializeStats:
+        ;Set GameState
+            lda StateTwoPlayer
+            sta gamestate
+        ;Set score to 0
+            lda #00
+            sta PlayerOneScore;
+            sta PlayerTwoScore;
         ;Set Ball Speed
             lda #01
             sta BallSpeed
         ;Set Ball Direction
             lda #%00000010
             sta BallDirection
+        ;Set PauseTimer
+            lda #00
+            sta PauseTimer
+            sta PauseTimer+1
         rts
+    
+    TwoPlayerMode:
+        jsr DisplaySprites
+        jsr ReadControllers
+        jsr BallMovement
+        jsr SpeedUpTimer
+        rts
+
     DisplaySprites:
         lda #$00
         sta OAMADDR ;Set low byte (00) of sprite RAM address
@@ -463,7 +487,8 @@
                 BallCheckLeftWall:
                     sec
                     sbc #LEFTWALL ;check collision with left wall
-                    jmp BallCheckLeftPaddleX ;if collision with left wall, player two scores
+                    bcs BallCheckLeftPaddleX
+                    jmp PlayerTwoScores ;if collision with left wall, player two scores
                 BallCheckLeftPaddleX: ;Check if ball is within paddles X
                     txa ;reload new position
                     sec
@@ -523,7 +548,8 @@
                 BallCheckRightWall:
                     lda #RIGHTWALL
                     sbc ballx ;check collision with right wall
-                    jmp BallCheckRightPaddleX ;if collision with right wall, player one scores
+                    bcs BallCheckRightPaddleX
+                    jmp PlayerOneScores ;if collision with right wall, player one scores
                 BallCheckRightPaddleX: ;Check if ball is within paddles X
                     lda PaddleTwoX
                     sec
@@ -584,32 +610,71 @@
 
         rts
 
-    PlayerOneScore:
-        jmp RESET
-    PlayerTwoScore:
-        jmp RESET
-    Timers:
+    PlayerOneScores:
+        lda PlayerOneScore
+        clc
+        adc #01
+        sta PlayerOneScore
+        cmp #07
+        beq PlayerOneWins
+        jmp RestartMatch
+    PlayerTwoScores:
+        lda PlayerTwoScore
+        clc
+        adc #01
+        sta PlayerTwoScore
+        cmp #07
+        beq PlayerTwoWins
+        jmp RestartMatch
+    
+    
+    SpeedUpTimer:
         ldx GameTimer ;Get low byte
         inx ;increment by 1
         stx GameTimer
-        bne TimersDone;if 0, increment high byte
+        bne SpeedUpTimerDone;if 0, increment high byte
         ldx GameTimer+1
         inx ;increment high byte by 1
         stx GameTimer+1
         txa
         cmp #$07
-        bne TimersDone;
+        bne SpeedUpTimerDone;
+        jsr ResetTimers
+        jsr IncreaseBallSpeed
+        SpeedUpTimerDone:
+            rts
+    
+    ResetTimers:
         lda #00 ;reset timer
         sta GameTimer
         sta GameTimer+1
-        jsr IncreaseBallSpeed
-        TimersDone:
-            rts
+        sta PauseTimer
+        sta PauseTimer+1
+        rts
+
+
     IncreaseBallSpeed:
         ldx BallSpeed
         inx
         stx BallSpeed
         rts
+
+    RestartMatch:
+        jsr LoadSprites
+        jsr LoadScore
+        lda #01 ;reset speed
+        sta BallSpeed
+        jsr ResetTimers
+        rts
+    PlayerOneWins:
+        jmp RESET
+
+    PlayerTwoWins:
+        jmp RESET
+
+
+
+
 ;Graphics
     ;Setup Palettes
         SetupPalettes: 
@@ -680,6 +745,59 @@
                 cpx #$2C ;See Sprites
                 bne LoadSpritesLoop
             rts
+        LoadScore:
+            ;Clear current sprites
+            lda #0
+            ldy #$50
+            :
+                sta $022C,y
+                dey
+                bne :-
+                
+
+            ;load player one's score
+            ldx PlayerOneScore
+            inx
+            ldy #03
+            :
+                dex
+                beq :+
+                iny
+                iny
+                iny
+                iny
+                jmp :-
+            :
+            ldx #4
+            :
+                lda PlayerOneScoreNumbers, y
+                sta $022C, y
+                dey
+                dex
+                bne :-
+                
+            ;load player two's score
+            ldx PlayerTwoScore
+            inx
+            ldy #03
+            :
+                dex
+                beq :+
+                iny
+                iny
+                iny
+                iny
+                jmp :-
+            :
+            ldx #4
+            :
+                lda PlayerTwoScoreNumbers, y
+                sta $0254, y
+                dey
+                dex
+                bne :-
+            rts
+
 
     ;Setup Attribute
         LoadAttribute:
@@ -713,7 +831,7 @@
             .byte $00,$0F,$10,$30	;sprite palette 4
     ;Sprites
         BallSprite:
-            .byte $0B,$00,$00,$78 ;0-3
+            .byte $80,$00,$00,$78 ;0-3
         PaddleOneSprite:
             .byte $70,$01,$00,$18 ;4-7
             .byte $78,$02,$00,$18 ;8-B
@@ -726,6 +844,28 @@
             .byte $80,$02,$00,$E0 ;20-23
             .byte $88,$02,$00,$E0 ;24-27
             .byte $90,$03,$00,$E0 ;28-2B
+        PlayerOneScoreNumbers:
+            .byte $10,$10,$00,$38 ;0 @ $022C
+            .byte $10,$11,$00,$38 ;1
+            .byte $10,$12,$00,$38 ;2
+            .byte $10,$13,$00,$38 ;3
+            .byte $10,$14,$00,$38 ;4
+            .byte $10,$15,$00,$38 ;5
+            .byte $10,$16,$00,$38 ;6
+            .byte $10,$17,$00,$38 ;7
+            .byte $10,$18,$00,$38 ;8
+            .byte $10,$19,$00,$38 ;9
+        PlayerTwoScoreNumbers:
+            .byte $10,$10,$00,$C0 ;0 @ $0254
+            .byte $10,$11,$00,$C0 ;1
+            .byte $10,$12,$00,$C0 ;2
+            .byte $10,$13,$00,$C0 ;3
+            .byte $10,$14,$00,$C0 ;4
+            .byte $10,$15,$00,$C0 ;5
+            .byte $10,$16,$00,$C0 ;6
+            .byte $10,$17,$00,$C0 ;7
+            .byte $10,$18,$00,$C0 ;8
+            .byte $10,$19,$00,$C0 ;9
     ;Nametables
         ;Background
             PlayStateBG:
