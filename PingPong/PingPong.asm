@@ -65,7 +65,7 @@
 ;----VARIABLES----
     ;Constants
         ;States
-            StateStart = 0 ;display title screen
+            StateTitle = 0 ;display title screen
             StateOnePlayer = 1 ;one-player mode
             StateTwoPlayer = 2 ;two-player mode
             StateGameOver = 3 ;display game over screen
@@ -153,7 +153,7 @@
 ;Setup
     setupFunctions:
         jsr SetupPalettes
-        jsr LoadPlayStateBG
+        jsr LoadTitleStateBG
         jsr LoadSprites
         jsr LoadScore
         jsr LoadAttribute
@@ -173,6 +173,11 @@
 
 ;Vblank 
     VBLANK: ;Runs every frame
+        CheckTitleMode:
+            lda gamestate
+            cmp #StateTitle
+            bne CheckTwoPlayer
+            jsr TitleScreen
         CheckTwoPlayer:
             lda gamestate
             cmp #StateTwoPlayer
@@ -193,7 +198,7 @@
 ;Game Functions
     InitializeStats:
         ;Set GameStates
-            lda #StateTwoPlayer
+            lda #StateTitle
             sta gamestate
         ;Set score to 0
             lda #00
@@ -211,6 +216,12 @@
             sta PauseTimer+1
         rts
     
+    TitleScreen:
+        jsr DisplaySprites
+        jsr ReadControllers
+        rts
+
+
     TwoPlayerMode:
         jsr DisplaySprites
         jsr ReadControllers
@@ -253,12 +264,20 @@
                 lda buttons
                 and #%00010000 ;bit 5 = start
                 beq PlayerOneReadStartDone ;branch if button is not pressed
-
+                lda gamestate
+                cmp #StateTitle
+                bne PlayerOneReadStartDone
+                lda #StateTwoPlayer
+                sta gamestate
                 PlayerOneReadStartDone:
+
             PlayerOneReadUp:
                 lda buttons
                 and #%00001000 ;bit 4 = up
                 beq PlayerOneReadUpDone ;branch if button is not pressed
+                lda gamestate
+                cmp #StateTitle
+                beq PlayerOneReadUpDone
                 
                 ;Get Paddle Sprite info
                 lda #$00
@@ -290,7 +309,9 @@
                 lda buttons
                 and #%00000100 ;bit 3 = down
                 beq PlayerOneReadDownDone ;branch if button is not pressed
-
+                lda gamestate
+                cmp #StateTitle
+                beq PlayerOneReadDownDone
                 ;Get Paddle Sprite info
                 lda #$00
                 sta SpritePointer
@@ -331,13 +352,20 @@
                 lda buttons
                 and #%00010000 ;bit 5 = start
                 beq PlayerTwoReadStartDone ;branch if button is not pressed
-
+                lda gamestate
+                cmp #StateTitle
+                bne PlayerTwoReadStartDone
+                lda #StateTwoPlayer
+                sta gamestate
                 PlayerTwoReadStartDone:
+
             PlayerTwoReadUp:
                 lda buttons
                 and #%00001000 ;bit 4 = up
                 beq PlayerTwoReadUpDone ;branch if button is not pressed
-                
+                lda gamestate
+                cmp #StateTitle
+                beq PlayerTwoReadUpDone
                 ;Get Paddle Sprite info
                 lda #$00
                 sta SpritePointer
@@ -368,7 +396,9 @@
                 lda buttons
                 and #%00000100 ;bit 3 = down
                 beq PlayerTwoReadDownDone ;branch if button is not pressed
-
+                lda gamestate
+                cmp #StateTitle
+                beq PlayerTwoReadDownDone
                 ;Get Paddle Sprite info
                 lda #$00
                 sta SpritePointer
@@ -683,7 +713,7 @@
         inx ;increment by 1
         stx PauseTimer
         txa
-        cmp #$40
+        cmp #$80
         bne GameOverDone;
         jmp RESET
         GameOverDone:
@@ -717,6 +747,8 @@
     PlayerOneWins:
         jsr LoadSprites
         jsr LoadScore
+        jsr LoadP1Loop
+        jsr LoadGameOverLoop
         lda #01 ;reset speed
         sta BallSpeed
         jsr ResetTimers
@@ -727,6 +759,8 @@
     PlayerTwoWins:
         jsr LoadSprites
         jsr LoadScore
+        jsr LoadP2Loop
+        jsr LoadGameOverLoop
         lda #01 ;reset speed
         sta BallSpeed
         jsr ResetTimers
@@ -767,6 +801,37 @@
         
 
     ;Setup Backgrounds
+        LoadTitleStateBG:
+            lda PPUSTATUS ;read PPU status to reset the high/low latch
+            lda #$24
+            sta PPUADDR ;write the high byte of $2000 address
+            lda #$00
+            sta PPUADDR ;write the low byte of $2000 address
+
+            lda #<TitleStateBG
+            sta BGPointer
+            lda #>TitleStateBG
+            sta BGPointer+1
+            
+            ldx #$00 ;start out at 0
+            ldy #$00
+            LoadTitleStateBGLoop:
+                lda (BGPointer),y
+                sta PPUDATA
+                iny
+                cpx #$03
+                bne :+
+                cpy #$C0
+                beq DoneLoadingTitleStateBG    
+            :
+                cpy #$00
+                bne LoadTitleStateBGLoop
+                inx
+                inc BGPointer+1
+                jmp LoadTitleStateBGLoop
+            DoneLoadingTitleStateBG:
+                rts
+
         LoadPlayStateBG:
             lda PPUSTATUS ;read PPU status to reset the high/low latch
             lda #$24
@@ -810,7 +875,7 @@
         LoadScore:
             ;Clear current sprites
             lda #0
-            ldy #$50
+            ldy #$40
             :
                 sta $022C,y
                 dey
@@ -854,12 +919,45 @@
             ldx #4
             :
                 lda PlayerTwoScoreNumbers, y
-                sta $0254, y
+                sta $024C, y
                 dey
                 dex
                 bne :-
             rts
 
+        
+        
+        LoadGameOverLoop:
+            ldx #$00
+            :
+            lda GameOverLetters, X
+            sta $027C, x
+            inx
+            cpx #$10 ;See Sprites
+            bne :-
+            rts
+
+        LoadP1Loop:
+            ldx #$00
+            :
+            lda P1Letters, x
+            sta $026C, x
+            inx
+            cpx #$08
+            bne :-
+            
+            rts
+
+        LoadP2Loop:
+            ldx #$00
+            :
+            lda P2Letters, x
+            sta $0274, x
+            inx
+            cpx #$08
+            bne :-
+            
+            rts
 
     ;Setup Attribute
         LoadAttribute:
@@ -908,28 +1006,38 @@
             .byte $90,$03,$00,$E0 ;28-2B
         PlayerOneScoreNumbers:
             .byte $10,$10,$00,$38 ;0 @ $022C
-            .byte $10,$11,$00,$38 ;1
-            .byte $10,$12,$00,$38 ;2
-            .byte $10,$13,$00,$38 ;3
-            .byte $10,$14,$00,$38 ;4
-            .byte $10,$15,$00,$38 ;5
-            .byte $10,$16,$00,$38 ;6
-            .byte $10,$17,$00,$38 ;7
-            .byte $10,$18,$00,$38 ;8
-            .byte $10,$19,$00,$38 ;9
+            .byte $10,$11,$00,$38 ;1 30
+            .byte $10,$12,$00,$38 ;2 34
+            .byte $10,$13,$00,$38 ;3 38
+            .byte $10,$14,$00,$38 ;4 3C
+            .byte $10,$15,$00,$38 ;5 40
+            .byte $10,$16,$00,$38 ;6 44
+            .byte $10,$17,$00,$38 ;7 48
         PlayerTwoScoreNumbers:
-            .byte $10,$10,$00,$C0 ;0 @ $0254
-            .byte $10,$11,$00,$C0 ;1
-            .byte $10,$12,$00,$C0 ;2
-            .byte $10,$13,$00,$C0 ;3
-            .byte $10,$14,$00,$C0 ;4
-            .byte $10,$15,$00,$C0 ;5
-            .byte $10,$16,$00,$C0 ;6
-            .byte $10,$17,$00,$C0 ;7
-            .byte $10,$18,$00,$C0 ;8
-            .byte $10,$19,$00,$C0 ;9
+            .byte $10,$10,$00,$C0 ;0 @ $024C
+            .byte $10,$11,$00,$C0 ;1 50
+            .byte $10,$12,$00,$C0 ;2 54
+            .byte $10,$13,$00,$C0 ;3 58
+            .byte $10,$14,$00,$C0 ;4 5C
+            .byte $10,$15,$00,$C0 ;5 60
+            .byte $10,$16,$00,$C0 ;6 64
+            .byte $10,$17,$00,$C0 ;7 68
+        P1Letters:
+            .byte $10,$24,$00,$68 ;P @ $026C
+            .byte $10,$25,$00,$70 ;1 @ $0270
+        P2Letters:
+            .byte $10,$26,$00,$68 ;P @ $0274
+            .byte $10,$27,$00,$70 ;2 @ $0278
+        GameOverLetters:
+            .byte $10,$20,$00,$80 ;W @ $027C
+            .byte $10,$21,$00,$88 ;I @ $0280
+            .byte $10,$22,$00,$90 ;N @ $0284 
+            .byte $10,$23,$00,$98 ;S & $0288-028B
+        
     ;Nametables
         ;Background
+            TitleStateBG:
+                .incbin "PingPongTitleState.nam"
             PlayStateBG:
                 .incbin "PingPongPlayState.nam"
         ;Attribute
