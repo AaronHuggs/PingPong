@@ -181,8 +181,13 @@
         CheckPaused:
             lda gamestate
             cmp #StatePause
-            bne VblankEnd
+            bne CheckGameOver
             jsr PauseMode
+        CheckGameOver:
+            lda gamestate
+            cmp #StateGameOver
+            bne VblankEnd
+            jsr GameOverMode
         VblankEnd:
             rti
 ;Game Functions
@@ -216,6 +221,11 @@
     PauseMode:
         jsr DisplaySprites
         jsr PauseTimerShort
+        rts
+
+    GameOverMode:
+        jsr DisplaySprites
+        jsr GameOverTimer
         rts
 
     DisplaySprites:
@@ -668,6 +678,17 @@
         PauseTimerShortDone:
             rts
 
+    GameOverTimer:
+        ldx PauseTimer ;Get low byte
+        inx ;increment by 1
+        stx PauseTimer
+        txa
+        cmp #$40
+        bne GameOverDone;
+        jmp RESET
+        GameOverDone:
+            rts
+
     ResetTimers:
         lda #00 ;reset timer
         sta GameTimer
@@ -692,11 +713,26 @@
         lda #StatePause
         sta gamestate
         rts
+
     PlayerOneWins:
-        jmp RESET
+        jsr LoadSprites
+        jsr LoadScore
+        lda #01 ;reset speed
+        sta BallSpeed
+        jsr ResetTimers
+        lda #StateGameOver
+        sta gamestate
+        rts
 
     PlayerTwoWins:
-        jmp RESET
+        jsr LoadSprites
+        jsr LoadScore
+        lda #01 ;reset speed
+        sta BallSpeed
+        jsr ResetTimers
+        lda #StateGameOver
+        sta gamestate
+        rts
 
 
 
